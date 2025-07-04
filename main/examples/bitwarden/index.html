@@ -4025,24 +4025,36 @@ To integrate with Bitwarden <strong>Secrets Manager</strong>, reference the <a h
 <ul>
 <li>Bitwarden account (it also works with Vaultwarden!)</li>
 <li>A Kubernetes secret which contains your Bitwarden credentials</li>
-<li>A Docker image running the Bitwarden CLI. You could use <code>ghcr.io/charlesthomas/bitwarden-cli:2023.12.1</code> or build your own.</li>
+<li>A Docker image running the Bitwarden CLI. You could use <code>ghcr.io/charlesthomas/bitwarden-cli:2025.6.1</code> or build your own.</li>
 </ul>
 <p>Here is an example of a Dockerfile used to build the image:
-<div class="highlight"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="s">debian:sid</span>
+<div class="highlight"><pre><span></span><code><span class="k">FROM</span><span class="w"> </span><span class="s">alpine:latest</span><span class="w"> </span><span class="k">AS</span><span class="w"> </span><span class="s">downloader</span>
 
-<span class="k">ENV</span><span class="w"> </span><span class="nv">BW_CLI_VERSION</span><span class="o">=</span><span class="m">2023</span>.12.1
+<span class="k">ARG</span><span class="w"> </span><span class="nv">BW_VERSION</span><span class="o">=</span><span class="m">2025</span>.6.1
 
-<span class="k">RUN</span><span class="w"> </span>apt<span class="w"> </span>update<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>apt<span class="w"> </span>install<span class="w"> </span>-y<span class="w"> </span>wget<span class="w"> </span>unzip<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>wget<span class="w"> </span>https://github.com/bitwarden/clients/releases/download/cli-v<span class="si">${</span><span class="nv">BW_CLI_VERSION</span><span class="si">}</span>/bw-linux-<span class="si">${</span><span class="nv">BW_CLI_VERSION</span><span class="si">}</span>.zip<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>unzip<span class="w"> </span>bw-linux-<span class="si">${</span><span class="nv">BW_CLI_VERSION</span><span class="si">}</span>.zip<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>chmod<span class="w"> </span>+x<span class="w"> </span>bw<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>mv<span class="w"> </span>bw<span class="w"> </span>/usr/local/bin/bw<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="se">\</span>
-<span class="w">    </span>rm<span class="w"> </span>-rfv<span class="w"> </span>*.zip
+<span class="k">RUN</span><span class="w"> </span>apk<span class="w"> </span>update<span class="w"> </span>--no-cache<span class="w"> </span><span class="se">\</span>
+<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>apk<span class="w"> </span>add<span class="w"> </span>--no-cache<span class="w"> </span>curl<span class="w"> </span>jq<span class="w"> </span><span class="se">\</span>
+<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>curl<span class="w"> </span>-sLo<span class="w"> </span>bw.zip<span class="w"> </span><span class="s2">&quot;https://github.com/bitwarden/clients/releases/download/cli-v</span><span class="si">${</span><span class="nv">BW_VERSION</span><span class="si">}</span><span class="s2">/bw-oss-linux-</span><span class="si">${</span><span class="nv">BW_VERSION</span><span class="si">}</span><span class="s2">.zip&quot;</span><span class="w"> </span><span class="se">\</span>
+<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nb">echo</span><span class="w"> </span><span class="k">$(</span><span class="se">\</span>
+<span class="w">    </span>curl<span class="w"> </span>-sL<span class="w"> </span><span class="s2">&quot;https://api.github.com/repos/bitwarden/clients/releases/tags/cli-v</span><span class="si">${</span><span class="nv">BW_VERSION</span><span class="si">}</span><span class="s2">&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>jq<span class="w"> </span>-r<span class="w"> </span><span class="s2">&quot;.assets[] | select(.name == \&quot;bw-oss-linux-</span><span class="si">${</span><span class="nv">BW_VERSION</span><span class="si">}</span><span class="s2">.zip\&quot;) .digest&quot;</span><span class="w"> </span><span class="p">|</span><span class="w"> </span><span class="se">\</span>
+<span class="w">    </span>cut<span class="w"> </span>-f2<span class="w"> </span>-d:<span class="k">)</span><span class="w"> </span>bw.zip<span class="w"> </span>&gt;<span class="w"> </span>sum.txt<span class="w"> </span><span class="se">\</span>
+<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>sha256sum<span class="w"> </span>-sc<span class="w"> </span>sum.txt<span class="w"> </span><span class="se">\</span>
+<span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span>unzip<span class="w"> </span>bw.zip
+
+<span class="k">FROM</span><span class="w"> </span><span class="s">debian:sid</span>
+
+<span class="k">COPY</span><span class="w"> </span>--from<span class="o">=</span>downloader<span class="w"> </span>bw<span class="w"> </span>/usr/local/bin/
+
+<span class="k">USER</span><span class="w"> </span><span class="s">1000</span>
+
+<span class="k">WORKDIR</span><span class="w"> </span><span class="s">/bw</span>
+
+<span class="k">ENV</span><span class="w"> </span><span class="nv">HOME</span><span class="o">=</span>/bw
 
 <span class="k">COPY</span><span class="w"> </span>entrypoint.sh<span class="w"> </span>/
 
-<span class="k">CMD</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/entrypoint.sh&quot;</span><span class="p">]</span>
+<span class="k">ENTRYPOINT</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;/entrypoint.sh&quot;</span><span class="p">]</span>
 </code></pre></div></p>
 <p>And the content of <code>entrypoint.sh</code>:
 <div class="highlight"><pre><span></span><code><span class="ch">#!/bin/bash</span>
